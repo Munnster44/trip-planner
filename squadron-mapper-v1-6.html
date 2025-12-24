@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Squadron/District Mapper v1.6 — © 2025 Glen Carruthers</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- Put xlsx.full.min.js beside this file -->
+<script src="./xlsx.full.min.js"></script>
+
+<style>
+  body { margin:0; font-family:Arial, sans-serif; }
+  header { background:#003366; color:#fff; padding:10px 12px; font-weight:700; }
+  #controls { padding:10px 12px; background:#f2f2f2; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  #map { height: calc(100vh - 148px); }
+
+  footer {
+    background:#003366; color:#fff; padding:8px 12px; font-size:12px;
+    display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  }
+
+  .pill { padding:6px 10px; background:#fff; border:1px solid #ddd; border-radius:999px; font-size:13px; }
+  select.pill, button.pill { padding:6px 10px; cursor:pointer; }
+  .muted { opacity:.75; }
+
+  .legend { background:#fff; padding:10px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,.15); max-height:40vh; overflow:auto; }
+  .swatch { width:14px; height:14px; display:inline-block; margin-right:8px; border:1px solid #333; vertical-align:middle; }
+
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+</style>
+</head>
+
+<body>
+<header>Canada Map — Pins/Area + Squadron/District + Filter + Shading + Export</header>
+
+<div id="controls" class="row">
+  <div class="row">
+    <input type="file" id="file" accept=".xlsx,.xls,.csv">
+    <span class="muted">Needs <b>Postal Code</b> plus <b>Squadron</b> and/or <b>District</b> columns</span>
+  </div>
+
+  <label class="pill">
+    Map by&nbsp;
+    <select id="mapBy" class="pill">
+      <option value="Squadron">Squadron</option>
+      <option value="District">District</option>
+    </select>
+  </label>
+
+  <label class="pill">
+    Filter&nbsp;
+    <select id="filterValue" class="pill" disabled>
+      <option value="__ALL__">All</option>
+    </select>
+  </label>
+
+  <label class="pill" style="cursor:pointer; user-select:none;">
+    <input type="checkbox" id="toggle" style="vertical-align:middle; margin-right:6px;">
+    Area map (postal zones)
+  </label>
+
+  <label class="pill" style="cursor:pointer; user-select:none;">
+    <input type="checkbox" id="shadeToggle" style="vertical-align:middle; margin-right:6px;" checked>
+    Strength shading
+  </label>
+
+  <button id="exportCsvBtn" class="pill" disabled>Export CSV</button>
+  <button id="exportXlsxBtn" class="pill" disabled>Export Excel (.xlsx)</button>
+
+  <div id="status" class="pill">Loading FSA map…</div>
+  <div id="stats" class="pill muted">No file loaded</div>
+</div>
+
+<div id="map"></div>
+
+<footer>
+  <div><b>Squadron/District Mapper v1.6</b></div>
+  <div>© 2025 Glen Carruthers</div>
+</footer>
+
+<script>
+/* ================= VERSION ================= */
+const APP_VERSION = "v1.6";
+
+/* ================= MAP ================= */
+const map = L.map('map').setView([56.13, -106.35], 4);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+ { attribution:'© OpenStreetMap contributors', maxZoom: 18 }).addTo(map);
+
+let pinLayer = L.layerGroup().addTo(map);
+let areaLayer = null;
+let legend = null;
+
+const fsaCentroids = new Map();
+let fsaGeo = null;
+
+// Keep loaded sheet so changing dropdowns doesn’t require re-upload
+let lastRows = null;
+let lastCols = null;
+
+// Computed from last render
+let dominantByFSA = new Map();   // FSA -> { top, topCount, total, pct, all:[ [val,cnt], ... ] }
+let tallyAll = new Map();        // key: FSA|val -> count
+let renderSummary = null;        // for exports
+
+const colorMap = new Map();      // value -> color
+
+const statusEl = document.getElementById("status");
+const statsEl  = document.getElementById("stats");
+const setStatus = t => statusEl.textContent = t;
+const setStats  = t => statsEl.textContent  = t;
+
+/* ================= POSTAL HELPERS ================= */
+const CA_POSTAL = /^[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTVXY][ ]?\d[ABCEGHJ-NPRSTVXY]\d$/i;
+
+const norm = v => String(v ?? "").trim();
+const cleanPostal = v => norm(v).toUpperCase().replace(/[^A-Z0-9]/g,"");
+const isCA = v => {
+  const p = cleanPostal(v);
+  if (p.length !== 6) return false;
+  return CA_POSTAL.test(p.substring(0,3) + " " + p.substring(3));
+};
+const fsa = v => cleanPostal(v).substring(0,3);
+
+/* ================= COLUMN DETECTION ================= */
+function findCol(headers, kind){
+  const tests = {
+    postal: [/^postal\s*code$/i, /postal/i, /post\s*code/i, /postcode/i],
+    squadron: [/^squadron$/i, /squadron/i, /sqn/i, /unit/i],
+    district: [/^district$/i, /district/i]
+  };
+  for (const re of tests[kind]){
+    const hit = headers.find(h => re.test(String(h)));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/* ================= COLORS ================= */
+function hashColor(s){
+  let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0;
+  return `hsl(${h%360} 70% 45%)`;
+}
+function colorFor(val){
+  const k = norm(val) || "(blank)";
+  if (!colorMap.has(k)) colorMap.set(k, hashColor(k));
+  return colorMap.get(k);
+}
+function dotIcon(color){
+  return L.divIcon({
+    className:"",
+    iconSize:[12,12],
+    iconAnchor:[6,6],
+    html:`<div style="width:12px;height:12px;border-radius:50%;
+      background:${color}; border:2px solid rgba(0,0,0,.65);
+      box-shadow:0 1px 3px rgba(0,0,0,.35);"></div>`
+  });
+}
+
+/* ================= CENTROIDS (correct) ================= */
+function centroid(geom){
+  let sumLat=0, sumLng=0, n=0;
+
+  function addPoint(pt){
+    if (!pt || pt.length < 2) return;
+    const lng = Number(pt[0]);
+    const lat = Number(pt[1]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    sumLat += lat; sumLng += lng; n++;
+  }
+  function addRing(ring){
+    if (!Array.isArray(ring)) return;
+    for (const pt of ring) addPoint(pt);
+  }
+
+  if (!geom || !geom.type || !geom.coordinates) return null;
+
+  if (geom.type === "Polygon"){
+    for (const ring of geom.coordinates) addRing(ring);
+  } else if (geom.type === "MultiPolygon"){
+    for (const poly of geom.coordinates){
+      for (const ring of poly) addRing(ring);
+    }
+  } else {
+    return null;
+  }
+  return n ? [sumLat/n, sumLng/n] : null;
+}
+
+/* ================= LOAD FSA GEOJSON ================= */
+async function loadFSA(){
+  try{
+    const r = await fetch("./fsa.geojson");
+    if (!r.ok) throw new Error(`HTTP ${r.status} loading fsa.geojson`);
+    fsaGeo = await r.json();
+
+    let ok = 0;
+    for (const f of (fsaGeo.features || [])){
+      const id = (f.properties?.CFSAUID || "").toString().toUpperCase().trim();
+      if (!id) continue;
+      const c = centroid(f.geometry);
+      if (!c) continue;
+      fsaCentroids.set(id, c);
+      ok++;
+    }
+    setStatus(`FSA loaded (${ok}). Load Excel/CSV…`);
+  } catch(e){
+    console.error(e);
+    setStatus("ERROR loading fsa.geojson");
+    alert("Could not load fsa.geojson.\n\nMake sure:\n1) fsa.geojson is beside index.html\n2) You are using GitHub Pages or http://localhost (not file://)\n3) fsa.geojson is valid GeoJSON.");
+  }
+}
+loadFSA();
+
+/* ================= LEGEND ================= */
+function showLegend(title){
+  if (legend) map.removeControl(legend);
+
+  legend = L.control({position:"bottomright"});
+  legend.onAdd = () => {
+    const d = L.DomUtil.create("div","legend");
+    const items = [...colorMap.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+    d.innerHTML =
+      `<div style="font-weight:700;margin-bottom:6px;">${title}</div>` +
+      (items.length ? items.map(([name,col]) =>
+        `<div><span class="swatch" style="background:${col}"></span>${name}</div>`
+      ).join("") : `<div class="muted">No data</div>`);
+    return d;
+  };
+  legend.addTo(map);
+}
+
+/* ================= MODE TOGGLE ================= */
+function applyMode(){
+  const areaOn = document.getElementById("toggle").checked;
+
+  if (areaOn){
+    if (map.hasLayer(pinLayer)) map.removeLayer(pinLayer);
+    if (areaLayer && !map.hasLayer(areaLayer)) areaLayer.addTo(map);
+  } else {
+    if (areaLayer && map.hasLayer(areaLayer)) map.removeLayer(areaLayer);
+    if (!map.hasLayer(pinLayer)) pinLayer.addTo(map);
+  }
+}
+
+/* ================= FILTER DROPDOWN (FIXED) ================= */
+function populateFilterOptions(values, label, keepValue){
+  const sel = document.getElementById("filterValue");
+  const previous = keepValue ?? sel.value ?? "__ALL__";
+
+  sel.innerHTML = `<option value="__ALL__">All ${label}s</option>`;
+  const sorted = [...values].sort((a,b)=>a.localeCompare(b));
+
+  for (const v of sorted){
+    const opt = document.createElement("option");
+    opt.value = v;
+    opt.textContent = v;
+    sel.appendChild(opt);
+  }
+
+  sel.value = (previous !== "__ALL__" && values.has(previous)) ? previous : "__ALL__";
+  sel.disabled = false;
+}
+
+/* ================= SHADING LOGIC ================= */
+function fillOpacityFor(pct){
+  const shadeOn = document.getElementById("shadeToggle").checked;
+  if (!shadeOn) return 0.55;
+  const minO = 0.25, maxO = 0.80;
+  const clamped = Math.max(0, Math.min(1, pct));
+  return minO + (maxO - minO) * clamped;
+}
+
+/* ================= EXPORT HELPERS ================= */
+function downloadCSV(filename, rows){
+  const esc = (v) => {
+    const s = String(v ?? "");
+    if (/[",\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
+    return s;
+  };
+  const csv = rows.map(r => r.map(esc).join(",")).join("\n");
+  const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function timestampStamp(){
+  const ts = new Date();
+  const pad = n => String(n).padStart(2,"0");
+  return `${ts.getFullYear()}-${pad(ts.getMonth()+1)}-${pad(ts.getDate())}_${pad(ts.getHours())}${pad(ts.getMinutes())}`;
+}
+
+/* ================= CORE RENDER ================= */
+function renderMap(){
+  if (!lastRows || !lastCols){
+    setStats("No file loaded");
+    return;
+  }
+
+  pinLayer.clearLayers();
+  dominantByFSA.clear();
+  tallyAll.clear();
+  colorMap.clear();
+  if (legend) map.removeControl(legend);
+  if (areaLayer) { try { map.removeLayer(areaLayer); } catch(_){} areaLayer = null; }
+
+  const mapBy = document.getElementById("mapBy").value;      // "Squadron" or "District"
+  const fieldCol = (mapBy === "District") ? lastCols.districtCol : lastCols.squadCol;
+
+  if (!fieldCol){
+    alert(`Your file does not appear to have a ${mapBy} column.`);
+    return;
+  }
+
+  const filterSel = document.getElementById("filterValue");
+  const wantedFilter = filterSel?.value || "__ALL__"; // capture BEFORE rebuilding options
+
+  let totalRows=0, canadaOK=0, invalidOrNonCA=0;
+  const valuesSeen = new Set();
+  const countByValue = new Map();
+  const countByFSA = new Map();
+
+  for (const r of lastRows){
+    totalRows++;
+    const pc = r[lastCols.postalCol];
+    if (!isCA(pc)) { invalidOrNonCA++; continue; }
+    canadaOK++;
+
+    const f = fsa(pc);
+    if (!f || f.length !== 3) continue;
+
+    const val = norm(r[fieldCol]) || "(blank)";
+    valuesSeen.add(val);
+
+    const key = `${f}|${val}`;
+    tallyAll.set(key, (tallyAll.get(key) || 0) + 1);
+
+    countByValue.set(val, (countByValue.get(val) || 0) + 1);
+    countByFSA.set(f, (countByFSA.get(f) || 0) + 1);
+  }
+
+  populateFilterOptions(valuesSeen, mapBy, wantedFilter);
+  const activeFilter = filterSel.value;
+
+  // NEW: FSA breakdown by value (for export)
+  const fsaByValue = new Map(); // value -> Map(FSA -> count)
+  for (const [key, cnt] of tallyAll.entries()){
+    const [fsaCode, val] = key.split("|");
+    if (activeFilter !== "__ALL__" && val !== activeFilter) continue;
+
+    if (!fsaByValue.has(val)) fsaByValue.set(val, new Map());
+    const m = fsaByValue.get(val);
+    m.set(fsaCode, (m.get(fsaCode) || 0) + cnt);
+  }
+
+  // Dominant per FSA (filtered view)
+  const byFSA = new Map(); // FSA -> Map(val->count)
+  for (const [key, cnt] of tallyAll.entries()){
+    const [f, val] = key.split("|");
+    if (activeFilter !== "__ALL__" && val !== activeFilter) continue;
+
+    if (!byFSA.has(f)) byFSA.set(f, new Map());
+    byFSA.get(f).set(val, (byFSA.get(f).get(val) || 0) + cnt);
+  }
+
+  for (const [f, m] of byFSA.entries()){
+    const sorted = [...m.entries()].sort((a,b)=>b[1]-a[1]);
+    const total = sorted.reduce((s, x) => s + x[1], 0);
+    const top = sorted[0][0];
+    const topCount = sorted[0][1];
+    const pct = total ? (topCount / total) : 0;
+    dominantByFSA.set(f, { top, topCount, total, pct, all: sorted });
+  }
+
+  // Pins
+  let pinsPlotted=0, pinsSkippedNoCentroid=0;
+
+  for (const [key, cnt] of tallyAll.entries()){
+    const [f, val] = key.split("|");
+    if (activeFilter !== "__ALL__" && val !== activeFilter) continue;
+
+    const c = fsaCentroids.get(f);
+    if (!c) { pinsSkippedNoCentroid++; continue; }
+
+    const col = colorFor(val);
+    L.marker(c, { icon: dotIcon(col) })
+      .bindPopup(`<b>${mapBy}:</b> ${val}<br><b>FSA:</b> ${f}<br><b>Members:</b> ${cnt}`)
+      .addTo(pinLayer);
+
+    pinsPlotted++;
+  }
+
+  // Area layer
+  areaLayer = L.geoJSON(fsaGeo, {
+    style: (feature) => {
+      const f = (feature.properties?.CFSAUID || "").toString().toUpperCase().trim();
+      const d = dominantByFSA.get(f);
+
+      const fill = d ? colorFor(d.top) : "#ddd";
+      const opacity = d ? fillOpacityFor(d.pct) : 0.10;
+
+      return { color:"#555", weight:1, fillColor: fill, fillOpacity: opacity };
+    },
+    onEachFeature: (feature, layer) => {
+      const f = (feature.properties?.CFSAUID || "").toString().toUpperCase().trim();
+      const d = dominantByFSA.get(f);
+
+      if (!d){
+        layer.bindPopup(`<b>FSA:</b> ${f}<br>No members found (or filtered out).`);
+        return;
+      }
+      const lines = d.all.map(([v,ct]) => `${v}: ${ct}`).join("<br>");
+      layer.bindPopup(
+        `<b>FSA:</b> ${f}<br>` +
+        `<b>Dominant ${mapBy}:</b> ${d.top}<br>` +
+        `<b>Dominance:</b> ${(d.pct*100).toFixed(0)}% (${d.topCount}/${d.total})<br>` +
+        `<hr style="margin:6px 0">` + lines
+      );
+    }
+  });
+
+  showLegend(mapBy);
+  applyMode();
+
+  const b = pinLayer.getBounds?.();
+  if (b && b.isValid && b.isValid()) map.fitBounds(b.pad(0.2));
+
+  setStats(
+    `${APP_VERSION} | Rows: ${totalRows} | Canada: ${canadaOK} | Non-CA/Invalid: ${invalidOrNonCA}` +
+    ` | Pins: ${pinsPlotted}` + (pinsSkippedNoCentroid ? ` | No centroid: ${pinsSkippedNoCentroid}` : "") +
+    (activeFilter !== "__ALL__" ? ` | Filter: ${activeFilter}` : "")
+  );
+  setStatus("Map updated");
+
+  // Export summary (USED by both CSV and XLSX exports)
+  const valuesSorted = [...countByValue.entries()].sort((a,b)=>b[1]-a[1]);
+  const fsaSorted = [...countByFSA.entries()].sort((a,b)=>b[1]-a[1]).slice(0, 50);
+
+  renderSummary = {
+    version: APP_VERSION,
+    generatedAt: new Date().toISOString(),
+    mapBy,
+    filter: activeFilter,
+    totals: { totalRows, canadaOK, invalidOrNonCA, pinsPlotted, pinsSkippedNoCentroid },
+    valuesSorted,
+    fsaSorted,
+    fsaByValue
+  };
+
+  document.getElementById("exportCsvBtn").disabled = false;
+  document.getElementById("exportXlsxBtn").disabled = false;
+}
+
+/* ================= FILE LOAD ================= */
+document.getElementById("file").addEventListener("change", async (ev) => {
+  const file = ev.target.files?.[0];
+  if (!file) return;
+
+  if (!fsaCentroids.size){
+    alert("FSA centroids are not loaded yet. If this persists, fsa.geojson is not loading.");
+    return;
+  }
+
+  setStatus("Reading file…");
+  document.getElementById("exportCsvBtn").disabled = true;
+  document.getElementById("exportXlsxBtn").disabled = true;
+
+  const filter = document.getElementById("filterValue");
+  filter.disabled = true;
+  filter.innerHTML = `<option value="__ALL__">All</option>`;
+
+  const wb = XLSX.read(await file.arrayBuffer(), { type:"array" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { defval:"" });
+
+  if (!rows.length){
+    alert("No rows found in the first sheet.");
+    setStatus("No rows found.");
+    return;
+  }
+
+  const headers = Object.keys(rows[0]);
+  const postalCol   = findCol(headers, "postal");
+  const squadCol    = findCol(headers, "squadron");
+  const districtCol = findCol(headers, "district");
+
+  if (!postalCol){
+    alert("Could not find a Postal Code column.");
+    setStatus("Missing Postal Code column");
+    return;
+  }
+  if (!squadCol && !districtCol){
+    alert("Could not find Squadron or District columns.");
+    setStatus("Missing Squadron/District columns");
+    return;
+  }
+
+  lastRows = rows;
+  lastCols = { postalCol, squadCol, districtCol };
+
+  filter.value = "__ALL__";
+  setStatus("File loaded. Rendering…");
+  renderMap();
+});
+
+/* ================= CONTROLS ================= */
+document.getElementById("toggle").addEventListener("change", applyMode);
+
+document.getElementById("mapBy").addEventListener("change", () => {
+  if (!lastRows) return;
+  const sel = document.getElementById("filterValue");
+  sel.value = "__ALL__";
+  renderMap();
+});
+
+document.getElementById("filterValue").addEventListener("change", () => {
+  if (lastRows) renderMap();
+});
+
+document.getElementById("shadeToggle").addEventListener("change", () => {
+  if (lastRows) renderMap();
+});
+
+/* ================= EXPORT: CSV ================= */
+document.getElementById("exportCsvBtn").addEventListener("click", () => {
+  if (!renderSummary) return;
+
+  const rows = [];
+  rows.push([`Canada Map Report — ${renderSummary.version}`]);
+  rows.push(["Generated At", renderSummary.generatedAt]);
+  rows.push(["Map By", renderSummary.mapBy]);
+  rows.push(["Filter", renderSummary.filter === "__ALL__" ? "All" : renderSummary.filter]);
+  rows.push([]);
+
+  rows.push(["Totals"]);
+  rows.push(["Total Rows", renderSummary.totals.totalRows]);
+  rows.push(["Canada Postal Rows", renderSummary.totals.canadaOK]);
+  rows.push(["Invalid/Non-Canada", renderSummary.totals.invalidOrNonCA]);
+  rows.push(["Pins Plotted", renderSummary.totals.pinsPlotted]);
+  rows.push(["Pins w/o centroid", renderSummary.totals.pinsSkippedNoCentroid]);
+  rows.push([]);
+
+  rows.push([`${renderSummary.mapBy} Counts`]);
+  rows.push([renderSummary.mapBy, "Count"]);
+  for (const [val, ct] of renderSummary.valuesSorted) rows.push([val, ct]);
+  rows.push([]);
+
+  rows.push(["Top FSAs by Member Count (Top 50)"]);
+  rows.push(["FSA", "Count"]);
+  for (const [fsa, ct] of renderSummary.fsaSorted) rows.push([fsa, ct]);
+
+  rows.push([]);
+  rows.push([`Postal Codes (FSAs) by ${renderSummary.mapBy}`]);
+  rows.push([renderSummary.mapBy, "FSA", "Member Count"]);
+
+  const values = [...renderSummary.fsaByValue.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+  for (const [val, fsaMap] of values){
+    const fsas = [...fsaMap.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+    for (const [fsaCode, cnt] of fsas){
+      rows.push([val, fsaCode, cnt]);
+    }
+  }
+
+  const fname = `squadron-mapper_${renderSummary.mapBy}_${timestampStamp()}.csv`;
+  downloadCSV(fname, rows);
+});
+
+/* ================= EXPORT: XLSX (MULTI-TAB) ================= */
+document.getElementById("exportXlsxBtn").addEventListener("click", () => {
+  if (!renderSummary) return;
+
+  // Build tabs as arrays-of-arrays
+  const summaryAOA = [
+    ["Canada Map Report", renderSummary.version],
+    ["Generated At", renderSummary.generatedAt],
+    ["Map By", renderSummary.mapBy],
+    ["Filter", renderSummary.filter === "__ALL__" ? "All" : renderSummary.filter],
+    [],
+    ["Totals"],
+    ["Total Rows", renderSummary.totals.totalRows],
+    ["Canada Postal Rows", renderSummary.totals.canadaOK],
+    ["Invalid/Non-Canada", renderSummary.totals.invalidOrNonCA],
+    ["Pins Plotted", renderSummary.totals.pinsPlotted],
+    ["Pins w/o centroid", renderSummary.totals.pinsSkippedNoCentroid]
+  ];
+
+  const countsAOA = [[renderSummary.mapBy, "Count"]];
+  for (const [val, ct] of renderSummary.valuesSorted) countsAOA.push([val, ct]);
+
+  const topFsasAOA = [["FSA", "Count"]];
+  for (const [fsaCode, ct] of renderSummary.fsaSorted) topFsasAOA.push([fsaCode, ct]);
+
+  const fsaByValueAOA = [[renderSummary.mapBy, "FSA", "Member Count"]];
+  const values = [...renderSummary.fsaByValue.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+  for (const [val, fsaMap] of values){
+    const fsas = [...fsaMap.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+    for (const [fsaCode, cnt] of fsas){
+      fsaByValueAOA.push([val, fsaCode, cnt]);
+    }
+  }
+
+  // Create workbook
+  const wb = XLSX.utils.book_new();
+
+  const wsSummary = XLSX.utils.aoa_to_sheet(summaryAOA);
+  const wsCounts  = XLSX.utils.aoa_to_sheet(countsAOA);
+  const wsTopFsas = XLSX.utils.aoa_to_sheet(topFsasAOA);
+  const wsByValue = XLSX.utils.aoa_to_sheet(fsaByValueAOA);
+
+  XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+  XLSX.utils.book_append_sheet(wb, wsCounts,  "Counts");
+  XLSX.utils.book_append_sheet(wb, wsTopFsas, "Top_FSAs");
+  XLSX.utils.book_append_sheet(wb, wsByValue, "FSAs_by_Value");
+
+  const fname = `squadron-mapper_${renderSummary.mapBy}_${timestampStamp()}.xlsx`;
+  XLSX.writeFile(wb, fname);
+});
+</script>
+</body>
+</html>
