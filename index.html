@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Personal Boating Trip Plan — Offline App v1.0</title>
+  <meta name="theme-color" content="#0b5aa5" />
+  <style>
+    :root{
+      --bg:#f6f7fb; --card:#ffffff; --text:#15202b; --muted:#5b6775;
+      --brand:#0b5aa5; --brand2:#083f75; --line:#dde3ea;
+      --shadow:0 6px 18px rgba(0,0,0,.08); --r:14px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    body{margin:0;background:var(--bg);color:var(--text);}
+    header{
+      position:sticky;top:0;z-index:5;
+      background:linear-gradient(90deg,var(--brand),var(--brand2));
+      color:#fff;padding:12px 14px;display:flex;gap:10px;align-items:center;
+      box-shadow:var(--shadow);
+    }
+    header .title{font-weight:800;font-size:16px;letter-spacing:.2px;}
+    header .sub{font-size:12px;opacity:.9}
+    header .spacer{flex:1;}
+    header button{
+      border:1px solid rgba(255,255,255,.35);
+      background:rgba(255,255,255,.12); color:#fff;
+      padding:8px 10px;border-radius:10px;cursor:pointer;
+      font-weight:700;
+    }
+    main{max-width:1100px;margin:14px auto;padding:0 12px 80px;}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px;}
+    @media(min-width:980px){.grid{grid-template-columns:1fr 1fr;}}
+    .card{
+      background:var(--card); border:1px solid var(--line);
+      border-radius:var(--r); box-shadow:var(--shadow);
+      padding:14px;
+    }
+    .card h2{margin:0 0 8px;font-size:16px}
+    .hint{color:var(--muted);font-size:12px;margin:0 0 10px;line-height:1.35}
+    label{display:block;font-size:12px;color:var(--muted);margin:10px 0 6px}
+    input, textarea, select{
+      width:100%; box-sizing:border-box;
+      border:1px solid var(--line); border-radius:12px;
+      padding:10px 11px; font-size:14px; background:#fff;
+      outline:none;
+    }
+    textarea{min-height:92px;resize:vertical}
+    .row{display:grid;grid-template-columns:1fr;gap:10px}
+    @media(min-width:640px){.row.two{grid-template-columns:1fr 1fr}}
+    @media(min-width:640px){.row.three{grid-template-columns:1fr 1fr 1fr}}
+    .btnbar{
+      position:fixed;left:0;right:0;bottom:0;z-index:6;
+      background:rgba(246,247,251,.92); backdrop-filter: blur(8px);
+      border-top:1px solid var(--line);
+      padding:10px 12px;
+    }
+    .btnwrap{max-width:1100px;margin:0 auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .btn{
+      border:1px solid var(--line); background:#fff;
+      padding:10px 12px; border-radius:12px; cursor:pointer;
+      font-weight:800;
+    }
+    .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+    .btn.danger{background:#fff;border-color:#ffccd0;color:#b00020}
+    .toast{
+      position:fixed;top:66px;right:12px;z-index:10;
+      background:#111827;color:#fff;border-radius:12px;
+      padding:10px 12px;box-shadow:var(--shadow);
+      font-size:13px;max-width:360px;display:none;
+    }
+    .footer{
+      margin-top:12px;color:var(--muted);font-size:12px;text-align:center;
+    }
+    .small{font-size:12px;color:var(--muted)}
+    .pill{
+      display:inline-block; padding:4px 8px; border-radius:999px;
+      border:1px solid var(--line); background:#fff; font-size:12px;
+    }
+    /* Print styling */
+    @media print{
+      header, .btnbar, .toast{display:none !important;}
+      body{background:#fff;}
+      .card{box-shadow:none;border:1px solid #bbb;}
+      main{max-width:none;margin:0;padding:0;}
+      .footer{display:none;}
+    }
+  </style>
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <header>
+    <div>
+      <div class="title">Personal Boating Trip Plan — Offline App</div>
+      <div class="sub">Replica of Transport Canada “Personal Boating Trip Plan Form” fields (plus Save/Print/Email)</div>
+    </div>
+    <div class="spacer"></div>
+    <button id="btnAbout" type="button">About</button>
+  </header>
+
+  <div class="toast" id="toast"></div>
+
+  <main>
+    <div class="card">
+      <h2>How this is used</h2>
+      <p class="hint">
+        Fill this plan, then <b>print</b> it and leave it with a responsible person on shore (or your marina),
+        or use <b>Email draft</b> to send them the plan. (Matches the intent of the TC page.)<br>
+        The sections below follow the same structure: owner/boat info, radio channels monitored, safety equipment,
+        and trip details. 
+      </p>
+      <div class="small">
+        Source reference: Transport Canada “Personal Boating Trip Plan Form” (fields/sections). 
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- Owner / Boat -->
+      <section class="card">
+        <h2>Owner’s name and boat details</h2>
+        <p class="hint">These are usually stable (save once, reuse each trip).</p>
+
+        <label for="ownerNameAddr">Owner’s name and address</label>
+        <textarea id="ownerNameAddr" placeholder="Full name, street, city, province, postal code"></textarea>
+
+        <div class="row two">
+          <div>
+            <label for="telNumber">Telephone number</label>
+            <input id="telNumber" type="tel" placeholder="e.g., 905-555-1234">
+          </div>
+          <div>
+            <label for="emergContact">Emergency contact number</label>
+            <input id="emergContact" type="tel" placeholder="e.g., 905-555-9876">
+          </div>
+        </div>
+
+        <label for="boatNameLicence">Boat’s name and licence number</label>
+        <input id="boatNameLicence" type="text" placeholder="Boat name / licence #">
+
+        <div class="row two">
+          <div>
+            <label for="propulsion">Sail / Power</label>
+            <select id="propulsion">
+              <option value="">Select…</option>
+              <option value="Sail">Sail</option>
+              <option value="Power">Power</option>
+              <option value="Sail + Power">Sail + Power</option>
+            </select>
+          </div>
+          <div>
+            <label for="sizeType">Size and type</label>
+            <input id="sizeType" type="text" placeholder="e.g., 26’ sailboat / 18’ bowrider">
+          </div>
+        </div>
+
+        <div class="row three">
+          <div>
+            <label for="hullColour">Hull colour</label>
+            <input id="hullColour" type="text" placeholder="e.g., white">
+          </div>
+          <div>
+            <label for="deckColour">Deck colour</label>
+            <input id="deckColour" type="text" placeholder="e.g., white">
+          </div>
+          <div>
+            <label for="cabinColour">Cabin colour</label>
+            <input id="cabinColour" type="text" placeholder="e.g., blue">
+          </div>
+        </div>
+
+        <label for="engineType">Type of engine</label>
+        <input id="engineType" type="text" placeholder="e.g., outboard 115hp / inboard diesel">
+
+        <label for="distinguish">Other distinguishing features</label>
+        <textarea id="distinguish" placeholder="Canvas colour, radar arch, decals, tender name, etc."></textarea>
+      </section>
+
+      <!-- Radio -->
+      <section class="card">
+        <h2>Radio channels monitored</h2>
+        <p class="hint">List what you monitor and any identifiers.</p>
+
+        <div class="row three">
+          <div>
+            <label for="radioHF">HF</label>
+            <input id="radioHF" type="text" placeholder="Channels / notes">
+          </div>
+          <div>
+            <label for="radioVHF">VHF</label>
+            <input id="radioVHF" type="text" placeholder="e.g., Ch 16, 68">
+          </div>
+          <div>
+            <label for="radioMF">MF</label>
+            <input id="radioMF" type="text" placeholder="Channels / notes">
+          </div>
+        </div>
+
+        <div class="row two">
+          <div>
+            <label for="mmsi">MMSI (Maritime Mobile Service Identity)</label>
+            <input id="mmsi" type="text" placeholder="e.g., 316xxxxxx">
+          </div>
+          <div>
+            <label for="satCell">Satellite or cellular telephone number</label>
+            <input id="satCell" type="tel" placeholder="Phone or sat phone #">
+          </div>
+        </div>
+
+        <label for="sarTel">Search and Rescue telephone number</label>
+        <input id="sarTel" type="text" placeholder="Regional SAR number (optional)">
+
+        <label for="plb">Personal locator beacon (PLB)</label>
+        <input id="plb" type="text" placeholder="PLB type / ID / notes">
+      </section>
+
+      <!-- Safety -->
+      <section class="card">
+        <h2>Safety equipment on board</h2>
+        <p class="hint">Record what is carried (and counts where relevant).</p>
+
+        <div class="row two">
+          <div>
+            <label for="lifeRafts">Life rafts</label>
+            <input id="lifeRafts" type="text" placeholder="e.g., 1 (6-person) / none">
+          </div>
+          <div>
+            <label for="dinghy">Dinghy or small boat (include colour)</label>
+            <input id="dinghy" type="text" placeholder="e.g., 10’ inflatable (grey)">
+          </div>
+        </div>
+
+        <label for="flares">Flares (include number and type)</label>
+        <input id="flares" type="text" placeholder="e.g., 6 x Type A, 2 x smoke">
+
+        <label for="pfd">Lifejackets or PFDs (include number)</label>
+        <input id="pfd" type="text" placeholder="e.g., 4 adult, 2 youth">
+
+        <label for="otherSafety">Other safety equipment</label>
+        <textarea id="otherSafety" placeholder="First aid kit, throw bag, EPIRB, fire extinguishers, etc."></textarea>
+      </section>
+
+      <!-- Trip Details -->
+      <section class="card">
+        <h2>Trip details (adjust these details every trip)</h2>
+        <p class="hint">These fields match the “Trip details” section on the TC form.</p>
+
+        <div class="row two">
+          <div>
+            <label for="depDate">Date of departure</label>
+            <input id="depDate" type="date">
+          </div>
+          <div>
+            <label for="depTime">Time of departure</label>
+            <input id="depTime" type="time">
+          </div>
+        </div>
+
+        <div class="row two">
+          <div>
+            <label for="leavingFrom">Leaving from</label>
+            <input id="leavingFrom" type="text" placeholder="Marina / ramp / coordinates">
+          </div>
+          <div>
+            <label for="headingTo">Heading to</label>
+            <input id="headingTo" type="text" placeholder="Destination / marina / coordinates">
+          </div>
+        </div>
+
+        <label for="route">Proposed route</label>
+        <textarea id="route" placeholder="Waypoints, channels, expected stops, alternates"></textarea>
+
+        <div class="row two">
+          <div>
+            <label for="arrDate">Date of arrival</label>
+            <input id="arrDate" type="date">
+          </div>
+          <div>
+            <label for="arrTime">Time of arrival</label>
+            <input id="arrTime" type="time">
+          </div>
+        </div>
+
+        <div class="row two">
+          <div>
+            <label for="stopover">Stopover point</label>
+            <input id="stopover" type="text" placeholder="Optional">
+          </div>
+          <div>
+            <label for="pob">Number of people on board</label>
+            <input id="pob" type="number" min="0" step="1" placeholder="e.g., 4">
+          </div>
+        </div>
+
+        <label for="emailTo">Email address to receive this plan</label>
+        <input id="emailTo" type="email" placeholder="shorecontact@example.com">
+        <div class="small">Tip: Use “Email draft” below to create a pre-filled message.</div>
+      </section>
+    </div>
+
+    <div class="footer">
+      Personal Boating Trip Plan — Offline App v1.0 • Inspired by Transport Canada form fields • © 2025
+    </div>
+  </main>
+
+  <div class="btnbar">
+    <div class="btnwrap">
+      <span class="pill" id="statusPill">Ready</span>
+      <span class="spacer"></span>
+      <button class="btn" id="btnFillNow" type="button">Auto-fill dates/times</button>
+      <button class="btn" id="btnSave" type="button">Save</button>
+      <button class="btn" id="btnLoad" type="button">Load</button>
+      <button class="btn" id="btnPrint" type="button">Print</button>
+      <button class="btn primary" id="btnEmail" type="button">Email draft</button>
+      <button class="btn danger" id="btnReset" type="button">Reset</button>
+    </div>
+  </div>
+
+  <script>
+    const KEY = "tripPlan_offline_v1";
+    const $ = (id) => document.getElementById(id);
+
+    const fields = [
+      "ownerNameAddr","telNumber","emergContact","boatNameLicence","propulsion","sizeType",
+      "hullColour","deckColour","cabinColour","engineType","distinguish",
+      "radioHF","radioVHF","radioMF","mmsi","satCell","sarTel","plb",
+      "lifeRafts","dinghy","flares","pfd","otherSafety",
+      "depDate","depTime","leavingFrom","headingTo","route","arrDate","arrTime","stopover","pob","emailTo"
+    ];
+
+    function toast(msg){
+      const t = $("toast");
+      t.textContent = msg;
+      t.style.display = "block";
+      setTimeout(()=>t.style.display="none", 2600);
+    }
+    function setStatus(msg){
+      $("statusPill").textContent = msg;
+    }
+    function getData(){
+      const data = {};
+      fields.forEach(f => data[f] = ($(f).valueAttach ? $(f).valueAttach : $(f).value) || "");
+      return data;
+    }
+    function setData(data){
+      fields.forEach(f => { if ($(f)) $(f).value = data[f] ?? ""; });
+    }
+
+    function requiredWarnings(d){
+      const missing = [];
+      // Keep this light—users may want partials; warn but don't block.
+      ["ownerNameAddr","boatNameLicence","telNumber","depDate","depTime","leavingFrom","headingTo","arrDate","arrTime","pob"].forEach(k=>{
+        if(!String(d[k]||"").trim()) missing.push(k);
+      });
+      return missing;
+    }
+
+    function buildPrintableText(d){
+      const line = (label, val) => `${label}: ${val && String(val).trim() ? String(val).trim() : ""}`.trimEnd();
+      const block = (title, lines) => `${title}\n${"-".repeat(title.length)}\n${lines.filter(Boolean).join("\n")}\n`;
+
+      return [
+        "PERSONAL BOATING TRIP PLAN",
+        "",
+        block("OWNER'S NAME AND ADDRESS", [
+          line("Owner's name and address", d.ownerNameAddr),
+          line("Telephone number", d.telNumber),
+          line("Emergency contact number", d.emergContact),
+        ]),
+        block("BOAT DETAILS", [
+          line("Boat's name and licence number", d.boatNameLicence),
+          line("Sail/Power", d.propulsion),
+          line("Size and type", d.sizeType),
+          line("Hull colour", d.hullColour),
+          line("Deck colour", d.deckColour),
+          line("Cabin colour", d.cabinColour),
+          line("Type of engine", d.engineType),
+          line("Other distinguishing features", d.distinguish),
+        ]),
+        block("RADIO CHANNELS MONITORED", [
+          line("HF", d.radioHF),
+          line("VHF", d.radioVHF),
+          line("MF", d.radioMF),
+          line("MMSI", d.mmsi),
+          line("Satellite/cellular telephone number", d.satCell),
+        ]),
+        block("SAFETY EQUIPMENT ON BOARD", [
+          line("Life rafts", d.lifeRafts),
+          line("Dinghy/small boat (include colour)", d.dinghy),
+          line("Flares (include number and type)", d.flares),
+          line("Lifejackets/PFDs (include number)", d.pfd),
+          line("Other safety equipment", d.otherSafety),
+          line("Search and Rescue telephone number", d.sarTel),
+          line("Personal locator beacon (PLB)", d.plb),
+        ]),
+        block("TRIP DETAILS (ADJUST EVERY TRIP)", [
+          line("Date of departure", d.depDate),
+          line("Time of departure", d.depTime),
+          line("Leaving from", d.leavingFrom),
+          line("Heading to", d.headingTo),
+          line("Proposed route", d.route),
+          line("Date of arrival", d.arrDate),
+          line("Time of arrival", d.arrTime),
+          line("Stopover point", d.stopover),
+          line("Number of people on board", d.pob),
+        ]),
+        "NOTES FOR SHORE CONTACT:",
+        "If the vessel does not arrive as planned, contact the appropriate Search and Rescue resources.",
+        "",
+        "Generated by: Personal Boating Trip Plan — Offline App v1.0"
+      ].join("\n");
+    }
+
+    function printFriendly(){
+      const d = getData();
+      const text = buildPrintableText(d);
+      const w = window.open("", "_blank");
+      w.document.write(`
+        <!doctype html><html><head><meta charset="utf-8">
+        <title>Trip Plan Print</title>
+        <style>
+          body{font-family:Arial, sans-serif; padding:18px; line-height:1.35;}
+          pre{white-space:pre-wrap;font-size:13px;}
+        </style>
+        </head><body>
+          <pre>${escapeHtml(text)}</pre>
+          <script>window.print();<\/script>
+        </body></html>
+      `);
+      w.document.close();
+    }
+
+    function escapeHtml(s){
+      return String(s)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    function emailDraft(){
+      const d = getData();
+      const to = (d.emailTo || "").trim();
+      const subject = encodeURIComponent("Personal Boating Trip Plan");
+      const body = encodeURIComponent(buildPrintableText(d));
+      const href = `mailto:${encodeURIComponent(to)}?subject=${subject}&body=${body}`;
+      window.location.href = href;
+    }
+
+    $("btnFillNow").addEventListener("click", () => {
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2,"0");
+      const yyyy = now.getFullYear();
+      const mm = pad(now.getMonth()+1);
+      const dd = pad(now.getDate());
+      $("depDate").value ||= `${yyyy}-${mm}-${dd}`;
+      $("depTime").value ||= `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      setStatus("Dates/times filled");
+      toast("Auto-filled departure date/time (arrival left for you).");
+    });
+
+    $("btnSave").addEventListener("click", () => {
+      const d = getData();
+      localStorage.setItem(KEY, JSON.stringify(d));
+      const missing = requiredWarnings(d);
+      setStatus("Saved");
+      toast(missing.length ? `Saved (note: ${missing.length} key fields blank).` : "Saved to this device.");
+    });
+
+    $("btnLoad").addEventListener("click", () => {
+      const raw = localStorage.getItem(KEY);
+      if(!raw){ toast("No saved plan found on this device."); return; }
+      try{
+        const d = JSON.parse(raw);
+        setData(d);
+        setStatus("Loaded");
+        toast("Loaded saved plan.");
+      }catch(e){
+        toast("Saved plan was corrupted (could not load).");
+      }
+    });
+
+    $("btnPrint").addEventListener("click", () => {
+      setStatus("Printing…");
+      printFriendly();
+      setTimeout(()=>setStatus("Ready"), 600);
+    });
+
+    $("btnEmail").addEventListener("click", () => {
+      const d = getData();
+      const missing = requiredWarnings(d);
+      if(missing.length){
+        toast("Email draft opened (some key fields are blank).");
+      }else{
+        toast("Opening email draft…");
+      }
+      emailDraft();
+    });
+
+    $("btnReset").addEventListener("click", () => {
+      if(!confirm("Clear all fields on screen? (Saved plan in storage is not deleted unless you save again.)")) return;
+      fields.forEach(f => { if ($(f)) $(f).value = ""; });
+      setStatus("Cleared");
+      toast("Form cleared.");
+    });
+
+    $("btnAbout").addEventListener("click", () => {
+      alert(
+`Personal Boating Trip Plan — Offline App v1.0
+
+• Replicates the field set used by Transport Canada’s “Personal Boating Trip Plan Form”
+• Adds Save/Load + Print + Email-draft for practical use
+• Data is stored only in your browser (localStorage) unless you email it.`
+      );
+    });
+
+    // PWA install/service worker
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./service-worker.js").catch(()=>{});
+      });
+    }
+  </script>
+</body>
+</html>
