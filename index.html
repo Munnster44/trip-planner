@@ -1,0 +1,1067 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Personal Boating Trip Plan — Offline App v1.3 — © 2025 Glen Carruthers</title>
+  <meta name="theme-color" content="#0b5aa5" />
+  <link rel="manifest" href="manifest.json">
+  <style>
+    :root{
+      --bg:#f6f7fb; --card:#ffffff; --text:#15202b; --muted:#5b6775;
+      --brand:#0b5aa5; --brand2:#083f75; --line:#dde3ea;
+      --shadow:0 6px 18px rgba(0,0,0,.08); --r:14px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    body{margin:0;background:var(--bg);color:var(--text);}
+    header{
+      position:sticky;top:0;z-index:5;
+      background:linear-gradient(90deg,var(--brand),var(--brand2));
+      color:#fff;padding:12px 14px;display:flex;gap:10px;align-items:center;
+      box-shadow:var(--shadow);
+    }
+    header .title{font-weight:900;font-size:16px;letter-spacing:.2px;}
+    header .sub{font-size:12px;opacity:.9}
+    header .spacer{flex:1;}
+    header button{
+      border:1px solid rgba(255,255,255,.35);
+      background:rgba(255,255,255,.12); color:#fff;
+      padding:8px 10px;border-radius:10px;cursor:pointer;
+      font-weight:900;
+      white-space:nowrap;
+    }
+
+    main{max-width:1100px;margin:14px auto;padding:0 12px 140px;}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px;}
+    @media(min-width:980px){.grid{grid-template-columns:1fr 1fr;}}
+    .card{
+      background:var(--card); border:1px solid var(--line);
+      border-radius:var(--r); box-shadow:var(--shadow);
+      padding:14px;
+    }
+    .card h2{margin:0 0 8px;font-size:16px}
+    .hint{color:var(--muted);font-size:12px;margin:0 0 10px;line-height:1.35}
+    .small{font-size:12px;color:var(--muted)}
+    .pill{
+      display:inline-block; padding:4px 8px; border-radius:999px;
+      border:1px solid var(--line); background:#fff; font-size:12px;
+    }
+    label{display:block;font-size:12px;color:var(--muted);margin:10px 0 6px}
+    input, textarea, select{
+      width:100%; box-sizing:border-box;
+      border:1px solid var(--line); border-radius:12px;
+      padding:10px 11px; font-size:14px; background:#fff;
+      outline:none;
+    }
+    textarea{min-height:92px;resize:vertical}
+    .row{display:grid;grid-template-columns:1fr;gap:10px}
+    @media(min-width:640px){.row.two{grid-template-columns:1fr 1fr}}
+    @media(min-width:640px){.row.three{grid-template-columns:1fr 1fr 1fr}}
+
+    .btnbar{
+      position:fixed;left:0;right:0;bottom:0;z-index:6;
+      background:rgba(246,247,251,.94); backdrop-filter: blur(8px);
+      border-top:1px solid var(--line);
+      padding:10px 12px;
+    }
+    .btnwrap{max-width:1100px;margin:0 auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .btn{
+      border:1px solid var(--line); background:#fff;
+      padding:10px 12px; border-radius:12px; cursor:pointer;
+      font-weight:900;
+      white-space:nowrap;
+    }
+    .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+    .btn.danger{background:#fff;border-color:#ffccd0;color:#b00020}
+    .sep{width:1px;height:30px;background:var(--line);display:inline-block;margin:0 2px;}
+
+    .toast{
+      position:fixed;top:66px;right:12px;z-index:10;
+      background:#111827;color:#fff;border-radius:12px;
+      padding:10px 12px;box-shadow:var(--shadow);
+      font-size:13px;max-width:380px;display:none;
+    }
+
+    .footer{
+      margin-top:12px;color:var(--muted);font-size:12px;text-align:center;
+    }
+
+    @media print{
+      header, .btnbar, .toast{display:none !important;}
+      body{background:#fff;}
+      .card{box-shadow:none;border:1px solid #bbb;}
+      main{max-width:none;margin:0;padding:0;}
+      .footer{display:none;}
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div>
+      <div class="title" id="hdrTitle">Personal Boating Trip Plan — Offline App</div>
+      <div class="sub" id="hdrSub">v1.3 • Boat Profile saved separately from each Trip • Print/Save as PDF • Save As to folder + filename</div>
+    </div>
+    <div class="spacer"></div>
+    <button id="btnLang" type="button">FR</button>
+    <button id="btnAbout" type="button">About</button>
+  </header>
+
+  <div class="toast" id="toast"></div>
+
+  <main>
+    <div class="card">
+      <h2 id="howTitle">How to use</h2>
+      <p class="hint" id="howText">
+        Save your <b>Boat Profile</b> once (stable details). For each outing, fill <b>Trip Details</b> and
+        then <b>Print / Save as PDF</b> or <b>Email Trip</b>. File saving supports:
+        <b>Save As…</b> (choose folder + filename) and <b>Quick Save</b> (to last file).
+      </p>
+      <div class="small" id="howNote">
+        Email Trip uses <code>mailto:</code> and opens your device’s default email app.
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- BOAT PROFILE -->
+      <section class="card">
+        <h2 id="boatTitle">Owner’s name and boat details (Boat Profile)</h2>
+        <p class="hint" id="boatHint">Usually stable — save once, reuse each trip.</p>
+
+        <label id="lblOwner" for="ownerNameAddr">Owner’s name and address</label>
+        <textarea id="ownerNameAddr" placeholder="Full name, street, city, province, postal code"></textarea>
+
+        <div class="row two">
+          <div>
+            <label id="lblTel" for="telNumber">Telephone number</label>
+            <input id="telNumber" type="tel" placeholder="e.g., 905-555-1234">
+          </div>
+          <div>
+            <label id="lblEmergPhone" for="emergContact">Emergency contact number</label>
+            <input id="emergContact" type="tel" placeholder="e.g., 905-555-9876">
+          </div>
+        </div>
+
+        <label id="lblBoat" for="boatNameLicence">Boat’s name and licence number</label>
+        <input id="boatNameLicence" type="text" placeholder="Boat name / licence #">
+
+        <div class="row two">
+          <div>
+            <label id="lblProp" for="propulsion">Sail / Power</label>
+            <select id="propulsion">
+              <option value="">Select…</option>
+              <option value="Sail">Sail</option>
+              <option value="Power">Power</option>
+              <option value="Sail + Power">Sail + Power</option>
+            </select>
+          </div>
+          <div>
+            <label id="lblSize" for="sizeType">Size and type</label>
+            <input id="sizeType" type="text" placeholder="e.g., 26’ sailboat / 18’ bowrider">
+          </div>
+        </div>
+
+        <div class="row three">
+          <div>
+            <label id="lblHull" for="hullColour">Hull colour</label>
+            <input id="hullColour" type="text" placeholder="e.g., white">
+          </div>
+          <div>
+            <label id="lblDeck" for="deckColour">Deck colour</label>
+            <input id="deckColour" type="text" placeholder="e.g., white">
+          </div>
+          <div>
+            <label id="lblCabin" for="cabinColour">Cabin colour</label>
+            <input id="cabinColour" type="text" placeholder="e.g., blue">
+          </div>
+        </div>
+
+        <label id="lblEngine" for="engineType">Type of engine</label>
+        <input id="engineType" type="text" placeholder="e.g., outboard 115hp / inboard diesel">
+
+        <label id="lblDist" for="distinguish">Other distinguishing features</label>
+        <textarea id="distinguish" placeholder="Canvas colour, radar arch, decals, tender name, etc."></textarea>
+      </section>
+
+      <!-- RADIO -->
+      <section class="card">
+        <h2 id="radioTitle">Radio channels monitored (Boat Profile)</h2>
+        <p class="hint" id="radioHint">List what you monitor and any identifiers.</p>
+
+        <div class="row three">
+          <div>
+            <label id="lblHF" for="radioHF">HF</label>
+            <input id="radioHF" type="text" placeholder="Channels / notes">
+          </div>
+          <div>
+            <label id="lblVHF" for="radioVHF">VHF</label>
+            <input id="radioVHF" type="text" placeholder="e.g., Ch 16, 68">
+          </div>
+          <div>
+            <label id="lblMF" for="radioMF">MF</label>
+            <input id="radioMF" type="text" placeholder="Channels / notes">
+          </div>
+        </div>
+
+        <div class="row two">
+          <div>
+            <label id="lblMMSI" for="mmsi">MMSI (Maritime Mobile Service Identity)</label>
+            <input id="mmsi" type="text" placeholder="e.g., 316xxxxxx">
+          </div>
+          <div>
+            <label id="lblSat" for="satCell">Satellite or cellular telephone number</label>
+            <input id="satCell" type="tel" placeholder="Phone or sat phone #">
+          </div>
+        </div>
+
+        <label id="lblSAR" for="sarTel">Search and Rescue telephone number</label>
+        <input id="sarTel" type="text" placeholder="Regional SAR number (optional)">
+
+        <label id="lblPLB" for="plb">Personal locator beacon (PLB)</label>
+        <input id="plb" type="text" placeholder="PLB type / ID / notes">
+      </section>
+
+      <!-- SAFETY -->
+      <section class="card">
+        <h2 id="safetyTitle">Safety equipment on board (Boat Profile)</h2>
+        <p class="hint" id="safetyHint">Record what is carried (and counts where relevant).</p>
+
+        <div class="row two">
+          <div>
+            <label id="lblRafts" for="lifeRafts">Life rafts</label>
+            <input id="lifeRafts" type="text" placeholder="e.g., 1 (6-person) / none">
+          </div>
+          <div>
+            <label id="lblDinghy" for="dinghy">Dinghy or small boat (include colour)</label>
+            <input id="dinghy" type="text" placeholder="e.g., 10’ inflatable (grey)">
+          </div>
+        </div>
+
+        <label id="lblFlares" for="flares">Flares (include number and type)</label>
+        <input id="flares" type="text" placeholder="e.g., 6 x Type A, 2 x smoke">
+
+        <label id="lblPFD" for="pfd">Lifejackets or PFDs (include number)</label>
+        <input id="pfd" type="text" placeholder="e.g., 4 adult, 2 youth">
+
+        <label id="lblOtherSafety" for="otherSafety">Other safety equipment</label>
+        <textarea id="otherSafety" placeholder="First aid kit, throw bag, EPIRB, fire extinguishers, etc."></textarea>
+      </section>
+
+      <!-- TRIP DETAILS -->
+      <section class="card">
+        <h2 id="tripTitle">Trip details (This Trip)</h2>
+        <p class="hint" id="tripHint">These fields change each outing. Save/Recall/Reset separately from Boat Profile.</p>
+
+        <div class="row two">
+          <div>
+            <label id="lblDepDate" for="depDate">Date of departure</label>
+            <input id="depDate" type="date">
+          </div>
+          <div>
+            <label id="lblDepTime" for="depTime">Time of departure</label>
+            <input id="depTime" type="time">
+          </div>
+        </div>
+
+        <div class="row two">
+          <div>
+            <label id="lblFrom" for="leavingFrom">Leaving from</label>
+            <input id="leavingFrom" type="text" placeholder="Marina / ramp / coordinates">
+          </div>
+          <div>
+            <label id="lblTo" for="headingTo">Heading to</label>
+            <input id="headingTo" type="text" placeholder="Destination / marina / coordinates">
+          </div>
+        </div>
+
+        <label id="lblRoute" for="route">Proposed route</label>
+        <textarea id="route" placeholder="Waypoints, channels, expected stops, alternates"></textarea>
+
+        <div class="row two">
+          <div>
+            <label id="lblArrDate" for="arrDate">Date of arrival</label>
+            <input id="arrDate" type="date">
+          </div>
+          <div>
+            <label id="lblArrTime" for="arrTime">Time of arrival</label>
+            <input id="arrTime" type="time">
+          </div>
+        </div>
+
+        <div class="row two">
+          <div>
+            <label id="lblStop" for="stopover">Stopover point</label>
+            <input id="stopover" type="text" placeholder="Optional">
+          </div>
+          <div>
+            <label id="lblPOB" for="pob">Number of people on board</label>
+            <input id="pob" type="number" min="0" step="1" placeholder="e.g., 4">
+          </div>
+        </div>
+
+        <label id="lblEmailTo" for="emailTo">Shore contact email (To:)</label>
+        <input id="emailTo" type="email" placeholder="shorecontact@example.com">
+
+        <div class="row two">
+          <div>
+            <label id="lblBackup" for="backupEmail">Backup email (CC: optional)</label>
+            <input id="backupEmail" type="email" placeholder="backup@example.com">
+          </div>
+          <div style="align-self:end;">
+            <label style="display:flex;gap:10px;align-items:center;margin:0;">
+              <input id="ccBackup" type="checkbox" style="width:auto;transform:scale(1.15);">
+              <span id="lblCC" class="small" style="color:var(--text);font-weight:800;">CC backup when emailing</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="small" id="emailNote">Email Trip opens your device’s default email app (mailto:).</div>
+      </section>
+    </div>
+
+    <div class="footer">
+      Personal Boating Trip Plan — Offline App v1.3 • © 2025 Glen Carruthers
+    </div>
+  </main>
+
+  <div class="btnbar">
+    <div class="btnwrap">
+      <span class="pill" id="statusPill">Ready</span>
+      <span class="spacer"></span>
+
+      <button class="btn" id="btnSetFolder" type="button">Set Default Folder…</button>
+      <button class="btn" id="btnNewTrip" type="button">New Trip</button>
+
+      <span class="sep" aria-hidden="true"></span>
+
+      <button class="btn" id="btnSaveBoat" type="button">Save Boat</button>
+      <button class="btn" id="btnSaveBoatAs" type="button">Save Boat As…</button>
+      <button class="btn" id="btnOpenBoat" type="button">Open Boat…</button>
+      <button class="btn danger" id="btnResetBoat" type="button">Reset Boat</button>
+
+      <span class="sep" aria-hidden="true"></span>
+
+      <button class="btn" id="btnSaveTrip" type="button">Save Trip</button>
+      <button class="btn" id="btnSaveTripAs" type="button">Save Trip As…</button>
+      <button class="btn" id="btnOpenTrip" type="button">Open Trip…</button>
+      <button class="btn danger" id="btnResetTrip" type="button">Reset Trip</button>
+
+      <span class="sep" aria-hidden="true"></span>
+
+      <button class="btn" id="btnPrintPDF" type="button">Print / Save as PDF</button>
+      <button class="btn primary" id="btnEmailTrip" type="button">Email Trip</button>
+    </div>
+  </div>
+
+  <script>
+    // ===== Version / Keys =====
+    const APP_VERSION = "v1.3";
+    const LS_LANG = "tripplan_lang";
+    const LS_BOAT = "tripplan_boat_local";
+    const LS_TRIP = "tripplan_trip_local";
+
+    // IndexedDB store for File System Access handles (Chrome/Edge)
+    const IDB_NAME = "tripplan_fs";
+    const IDB_STORE = "handles";
+    const IDB_KEYS = {
+      boatFile: "boatFile",
+      tripFile: "tripFile",
+      dir: "defaultDir"
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    // ===== Field groups =====
+    const boatFields = [
+      "ownerNameAddr","telNumber","emergContact","boatNameLicence","propulsion","sizeType",
+      "hullColour","deckColour","cabinColour","engineType","distinguish",
+      "radioHF","radioVHF","radioMF","mmsi","satCell","sarTel","plb",
+      "lifeRafts","dinghy","flares","pfd","otherSafety"
+    ];
+
+    const tripFields = [
+      "depDate","depTime","leavingFrom","headingTo","route",
+      "arrDate","arrTime","stopover","pob","emailTo","backupEmail","ccBackup"
+    ];
+
+    // ===== i18n =====
+    const I18N = {
+      en: {
+        hdrTitle: "Personal Boating Trip Plan — Offline App",
+        hdrSub: "v1.3 • Boat Profile saved separately from each Trip • Print/Save as PDF • Save As to folder + filename",
+        howTitle: "How to use",
+        howText: "Save your Boat Profile once (stable details). For each outing, fill Trip Details and then Print / Save as PDF or Email Trip. File saving supports: Save As… (choose folder + filename) and Quick Save (to last file).",
+        howNote: "Email Trip uses mailto: and opens your device’s default email app.",
+        boatTitle: "Owner’s name and boat details (Boat Profile)",
+        boatHint: "Usually stable — save once, reuse each trip.",
+        radioTitle: "Radio channels monitored (Boat Profile)",
+        radioHint: "List what you monitor and any identifiers.",
+        safetyTitle: "Safety equipment on board (Boat Profile)",
+        safetyHint: "Record what is carried (and counts where relevant).",
+        tripTitle: "Trip details (This Trip)",
+        tripHint: "These fields change each outing. Save/Recall/Reset separately from Boat Profile.",
+        lblCC: "CC backup when emailing",
+        emailNote: "Email Trip opens your device’s default email app (mailto:).",
+        btnLang: "FR",
+        aboutTitle: "About"
+      },
+      fr: {
+        hdrTitle: "Plan de voyage — Application hors ligne",
+        hdrSub: "v1.3 • Profil du bateau séparé de chaque sortie • Imprimer / Enregistrer en PDF • Enregistrer sous (dossier + nom)",
+        howTitle: "Mode d’emploi",
+        howText: "Enregistrez le Profil du bateau une seule fois (détails stables). Pour chaque sortie, remplissez les Détails du voyage puis Imprimer / Enregistrer en PDF ou Envoyer par courriel. L’enregistrement de fichiers comprend : Enregistrer sous… (choisir dossier + nom) et Enregistrement rapide (dernier fichier).",
+        howNote: "Courriel via mailto: — ouvre l’application de courriel par défaut de votre appareil.",
+        boatTitle: "Nom du propriétaire et détails du bateau (Profil)",
+        boatHint: "Généralement stable — enregistrer une fois, réutiliser.",
+        radioTitle: "Canaux radio surveillés (Profil)",
+        radioHint: "Indiquez les canaux surveillés et identifiants.",
+        safetyTitle: "Équipement de sécurité à bord (Profil)",
+        safetyHint: "Indiquez l’équipement transporté (et les quantités).",
+        tripTitle: "Détails du voyage (Cette sortie)",
+        tripHint: "Ces champs changent à chaque sortie. Enregistrer/ouvrir/réinitialiser séparément du Profil.",
+        lblCC: "Mettre le courriel de secours en CC",
+        emailNote: "Envoyer par courriel ouvre l’application de courriel par défaut (mailto:).",
+        btnLang: "EN",
+        aboutTitle: "À propos"
+      }
+    };
+
+    function getLang(){
+      return localStorage.getItem(LS_LANG) || "en";
+    }
+    function setLang(lang){
+      localStorage.setItem(LS_LANG, lang);
+      applyLang();
+    }
+    function applyLang(){
+      const lang = getLang();
+      const t = I18N[lang];
+
+      $("hdrTitle").textContent = t.hdrTitle;
+      $("hdrSub").textContent = t.hdrSub;
+      $("howTitle").textContent = t.howTitle;
+      $("howText").textContent = t.howText;
+      $("howNote").textContent = t.howNote;
+
+      $("boatTitle").textContent = t.boatTitle;
+      $("boatHint").textContent = t.boatHint;
+
+      $("radioTitle").textContent = t.radioTitle;
+      $("radioHint").textContent = t.radioHint;
+
+      $("safetyTitle").textContent = t.safetyTitle;
+      $("safetyHint").textContent = t.safetyHint;
+
+      $("tripTitle").textContent = t.tripTitle;
+      $("tripHint").textContent = t.tripHint;
+
+      $("lblCC").textContent = t.lblCC;
+      $("emailNote").textContent = t.emailNote;
+
+      $("btnLang").textContent = t.btnLang;
+    }
+
+    // ===== UI helpers =====
+    function toast(msg){
+      const t = $("toast");
+      t.textContent = msg;
+      t.style.display = "block";
+      setTimeout(()=>t.style.display="none", 2800);
+    }
+    function setStatus(msg){
+      $("statusPill").textContent = msg;
+    }
+
+    // ===== Data helpers =====
+    function getGroup(fields){
+      const d = {};
+      fields.forEach(f => {
+        const el = $(f);
+        if(!el) return;
+        if(el.type === "checkbox") d[f] = !!el.checked;
+        else d[f] = (el.value ?? "").toString();
+      });
+      return d;
+    }
+    function setGroup(fields, data){
+      fields.forEach(f => {
+        const el = $(f);
+        if(!el) return;
+        if(el.type === "checkbox") el.checked = !!data?.[f];
+        else el.value = data?.[f] ?? "";
+      });
+    }
+    function clearGroup(fields){
+      fields.forEach(f => {
+        const el = $(f);
+        if(!el) return;
+        if(el.type === "checkbox") el.checked = false;
+        else el.value = "";
+      });
+    }
+
+    function pad2(n){ return String(n).padStart(2,"0"); }
+    function todayISO(){
+      const now = new Date();
+      return `${now.getFullYear()}-${pad2(now.getMonth()+1)}-${pad2(now.getDate())}`;
+    }
+    function timeISO(){
+      const now = new Date();
+      return `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+    }
+
+    function slugify(s){
+      return (s || "")
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replace(/['"]/g,"")
+        .replace(/[^a-z0-9]+/g,"-")
+        .replace(/-+/g,"-")
+        .replace(/^-|-$/g,"");
+    }
+
+    function suggestedBoatFilename(){
+      const boat = ( $("boatNameLicence").value || "boat-profile" ).trim();
+      return `BoatProfile_${slugify(boat) || "boat"}.json`;
+    }
+
+    function suggestedTripFilename(){
+      const boat = ($("boatNameLicence").value || "").trim();
+      const dep = ($("depDate").value || todayISO()).trim();
+      const dest = ($("headingTo").value || "").trim();
+      const parts = [
+        "TripPlan",
+        boat ? slugify(boat) : null,
+        dep ? dep : null,
+        dest ? slugify(dest) : null
+      ].filter(Boolean);
+      return parts.join("_") + ".json";
+    }
+
+    // ===== Print/email content =====
+    function buildPrintableText(boat, trip){
+      const line = (label, val) => `${label}: ${val && String(val).trim() ? String(val).trim() : ""}`.trimEnd();
+      const block = (title, lines) => `${title}\n${"-".repeat(title.length)}\n${lines.filter(Boolean).join("\n")}\n`;
+
+      return [
+        "PERSONAL BOATING TRIP PLAN",
+        `Generated: ${new Date().toLocaleString()}`,
+        "",
+        block("OWNER'S NAME AND ADDRESS", [
+          line("Owner's name and address", boat.ownerNameAddr),
+          line("Telephone number", boat.telNumber),
+          line("Emergency contact number", boat.emergContact),
+        ]),
+        block("BOAT DETAILS", [
+          line("Boat's name and licence number", boat.boatNameLicence),
+          line("Sail/Power", boat.propulsion),
+          line("Size and type", boat.sizeType),
+          line("Hull colour", boat.hullColour),
+          line("Deck colour", boat.deckColour),
+          line("Cabin colour", boat.cabinColour),
+          line("Type of engine", boat.engineType),
+          line("Other distinguishing features", boat.distinguish),
+        ]),
+        block("RADIO CHANNELS MONITORED", [
+          line("HF", boat.radioHF),
+          line("VHF", boat.radioVHF),
+          line("MF", boat.radioMF),
+          line("MMSI", boat.mmsi),
+          line("Satellite/cellular telephone number", boat.satCell),
+        ]),
+        block("SAFETY EQUIPMENT ON BOARD", [
+          line("Life rafts", boat.lifeRafts),
+          line("Dinghy/small boat (include colour)", boat.dinghy),
+          line("Flares (include number and type)", boat.flares),
+          line("Lifejackets/PFDs (include number)", boat.pfd),
+          line("Other safety equipment", boat.otherSafety),
+          line("Search and Rescue telephone number", boat.sarTel),
+          line("Personal locator beacon (PLB)", boat.plb),
+        ]),
+        block("TRIP DETAILS (THIS TRIP)", [
+          line("Date of departure", trip.depDate),
+          line("Time of departure", trip.depTime),
+          line("Leaving from", trip.leavingFrom),
+          line("Heading to", trip.headingTo),
+          line("Proposed route", trip.route),
+          line("Date of arrival", trip.arrDate),
+          line("Time of arrival", trip.arrTime),
+          line("Stopover point", trip.stopover),
+          line("Number of people on board", trip.pob),
+        ]),
+        "NOTES FOR SHORE CONTACT:",
+        "If the vessel does not arrive as planned, contact the appropriate Search and Rescue resources.",
+        "",
+        `Created by: Personal Boating Trip Plan — Offline App ${APP_VERSION} — © 2025 Glen Carruthers`
+      ].join("\n");
+    }
+
+    function escapeHtml(s){
+      return String(s)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    function printOrPDF(){
+      // User chooses "Save as PDF" in print dialog if desired.
+      const boat = getGroup(boatFields);
+      const trip = getGroup(tripFields);
+      const text = buildPrintableText(boat, trip);
+
+      const w = window.open("", "_blank");
+      w.document.write(`
+        <!doctype html><html><head><meta charset="utf-8">
+        <title>Trip Plan Print / PDF</title>
+        <style>
+          body{font-family:Arial,sans-serif;padding:18px;line-height:1.35;}
+          pre{white-space:pre-wrap;font-size:13px;}
+        </style>
+        </head><body><pre>${escapeHtml(text)}</pre>
+        <script>window.print();<\/script></body></html>
+      `);
+      w.document.close();
+    }
+
+    function emailTrip(){
+      // Uses device default mail utility via mailto
+      const boat = getGroup(boatFields);
+      const trip = getGroup(tripFields);
+
+      const to = (trip.emailTo || "").trim();
+      const cc = (trip.ccBackup && (trip.backupEmail || "").trim()) ? (trip.backupEmail || "").trim() : "";
+
+      const boatName = (boat.boatNameLicence || "").trim();
+      const dep = (trip.depDate || "").trim();
+      const subjectRaw = `Boating Trip Plan${boatName ? " — " + boatName : ""}${dep ? " — " + dep : ""}`;
+
+      const subject = encodeURIComponent(subjectRaw);
+      const body = encodeURIComponent(buildPrintableText(boat, trip));
+
+      const params = [];
+      params.push(`subject=${subject}`);
+      params.push(`body=${body}`);
+      if(cc) params.push(`cc=${encodeURIComponent(cc)}`);
+
+      window.location.href = `mailto:${encodeURIComponent(to)}?${params.join("&")}`;
+    }
+
+    // ===== On-screen save/recall (localStorage) =====
+    function saveLocal(){
+      localStorage.setItem(LS_BOAT, JSON.stringify(getGroup(boatFields)));
+      localStorage.setItem(LS_TRIP, JSON.stringify(getGroup(tripFields)));
+    }
+    function loadLocalBoat(){
+      const raw = localStorage.getItem(LS_BOAT);
+      if(!raw) return null;
+      try { return JSON.parse(raw); } catch { return null; }
+    }
+    function loadLocalTrip(){
+      const raw = localStorage.getItem(LS_TRIP);
+      if(!raw) return null;
+      try { return JSON.parse(raw); } catch { return null; }
+    }
+
+    // ===== IndexedDB for FS handles =====
+    function idbOpen(){
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(IDB_NAME, 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if(!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    async function idbSet(key, value){
+      const db = await idbOpen();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, "readwrite");
+        tx.objectStore(IDB_STORE).put(value, key);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+    async function idbGet(key){
+      const db = await idbOpen();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, "readonly");
+        const req = tx.objectStore(IDB_STORE).get(key);
+        req.onsuccess = () => resolve(req.result ?? null);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    // ===== File System Access helpers =====
+    function supportsFS(){
+      return !!window.showSaveFilePicker && !!window.showOpenFilePicker;
+    }
+
+    function downloadFallback(obj, filename){
+      const blob = new Blob([JSON.stringify(obj, null, 2)], {type:"application/json"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    async function writeToFileHandle(handle, obj){
+      const writable = await handle.createWritable();
+      await writable.write(JSON.stringify(obj, null, 2));
+      await writable.close();
+    }
+
+    async function pickSaveFile(suggestedName){
+      const handle = await showSaveFilePicker({
+        suggestedName,
+        types: [{ description: "JSON", accept: { "application/json": [".json"] } }]
+      });
+      return handle;
+    }
+
+    async function pickOpenFile(){
+      const [handle] = await showOpenFilePicker({
+        multiple: false,
+        types: [{ description: "JSON", accept: { "application/json": [".json"] } }]
+      });
+      return handle;
+    }
+
+    async function ensureWritePermission(handle){
+      if(!handle) return false;
+      if(handle.queryPermission){
+        let p = await handle.queryPermission({mode:"readwrite"});
+        if(p !== "granted"){
+          p = await handle.requestPermission({mode:"readwrite"});
+        }
+        return p === "granted";
+      }
+      return true; // older implementations
+    }
+
+    // ===== Default folder feature =====
+    async function setDefaultFolder(){
+      if(!window.showDirectoryPicker){
+        toast("Default folder requires Chrome/Edge (Directory Picker not available).");
+        return;
+      }
+      try{
+        const dir = await showDirectoryPicker({mode:"readwrite"});
+        await idbSet(IDB_KEYS.dir, dir);
+        toast("Default folder saved (Chrome/Edge only).");
+      }catch{
+        toast("Default folder not set.");
+      }
+    }
+
+    async function saveUsingDefaultFolderOrSaveAs(obj, filename, idbKeyForFileHandle){
+      // If default folder exists and permission is granted, save there with filename (no dialog).
+      // Otherwise fall back to Save As…
+      if(window.showDirectoryPicker){
+        const dir = await idbGet(IDB_KEYS.dir);
+        if(dir){
+          try{
+            const ok = await ensureWritePermission(dir);
+            if(ok){
+              const fileHandle = await dir.getFileHandle(filename, {create:true});
+              await writeToFileHandle(fileHandle, obj);
+              await idbSet(idbKeyForFileHandle, fileHandle);
+              return {mode:"defaultFolder", filename};
+            }
+          }catch{
+            // fall through to Save As
+          }
+        }
+      }
+      // Save As fallback
+      const handle = await pickSaveFile(filename);
+      await writeToFileHandle(handle, obj);
+      await idbSet(idbKeyForFileHandle, handle);
+      return {mode:"saveAs", filename};
+    }
+
+    async function quickSaveFromLast(obj, idbKeyForFileHandle, fallbackSuggestedName){
+      const handle = await idbGet(idbKeyForFileHandle);
+      if(handle){
+        const ok = await ensureWritePermission(handle);
+        if(ok){
+          await writeToFileHandle(handle, obj);
+          return {mode:"quickSave"};
+        }
+      }
+      // If no last handle or no permission, do Save As
+      const h = await pickSaveFile(fallbackSuggestedName);
+      await writeToFileHandle(h, obj);
+      await idbSet(idbKeyForFileHandle, h);
+      return {mode:"saveAs"};
+    }
+
+    async function openAndLoad(idbKeyForFileHandle, onData){
+      const handle = await pickOpenFile();
+      const file = await handle.getFile();
+      const text = await file.text();
+      const data = JSON.parse(text);
+      await idbSet(idbKeyForFileHandle, handle);
+      onData(data);
+      return file.name;
+    }
+
+    // ===== Boat / Trip file schemas =====
+    function buildBoatFile(){
+      return {
+        schema: "tripplan.boatProfile",
+        version: APP_VERSION,
+        savedAt: new Date().toISOString(),
+        boat: getGroup(boatFields)
+      };
+    }
+
+    function buildTripFile(){
+      return {
+        schema: "tripplan.tripPlan",
+        version: APP_VERSION,
+        savedAt: new Date().toISOString(),
+        boat: getGroup(boatFields),
+        trip: getGroup(tripFields)
+      };
+    }
+
+    function loadBoatFile(data){
+      // Accept either schema or raw boat object
+      const boat = data?.boat ?? data;
+      setGroup(boatFields, boat || {});
+      saveLocal();
+    }
+
+    function loadTripFile(data){
+      // Accept schema form or raw
+      if(data?.boat) setGroup(boatFields, data.boat);
+      if(data?.trip) setGroup(tripFields, data.trip);
+      else setGroup(tripFields, data || {});
+      saveLocal();
+    }
+
+    // ===== Button wiring =====
+    $("btnLang").addEventListener("click", () => {
+      const lang = getLang() === "en" ? "fr" : "en";
+      setLang(lang);
+      toast(lang === "en" ? "Language set to English." : "Langue réglée en français.");
+    });
+
+    $("btnAbout").addEventListener("click", () => {
+      alert(
+`Personal Boating Trip Plan — Offline App ${APP_VERSION}
+
+• Boat Profile and Trip Details are separate
+• Save As… lets you choose folder + filename (Chrome/Edge best)
+• Quick Save writes back to your last saved file
+• Print / Save as PDF uses your browser print dialog
+• Email Trip opens your default email app (mailto:)
+
+© 2025 Glen Carruthers`
+      );
+    });
+
+    $("btnSetFolder").addEventListener("click", async () => {
+      setStatus("Setting folder…");
+      await setDefaultFolder();
+      setStatus("Ready");
+    });
+
+    $("btnNewTrip").addEventListener("click", () => {
+      clearGroup(tripFields);
+      $("depDate").value = todayISO();
+      $("depTime").value = timeISO();
+      setStatus("New Trip");
+      toast("Trip fields cleared. Departure date/time set to now.");
+      saveLocal();
+    });
+
+    $("btnResetBoat").addEventListener("click", () => {
+      if(!confirm("Clear BOAT profile fields on screen?")) return;
+      clearGroup(boatFields);
+      setStatus("Boat cleared");
+      toast("Boat fields cleared.");
+      saveLocal();
+    });
+
+    $("btnResetTrip").addEventListener("click", () => {
+      if(!confirm("Clear TRIP fields on screen?")) return;
+      clearGroup(tripFields);
+      setStatus("Trip cleared");
+      toast("Trip fields cleared.");
+      saveLocal();
+    });
+
+    // On-screen save/recall
+    $("btnSaveBoat").addEventListener("click", async () => {
+      // Quick Save Boat file (or Save As if none)
+      const obj = buildBoatFile();
+      const suggested = suggestedBoatFilename();
+
+      setStatus("Saving boat…");
+      try{
+        if(supportsFS()){
+          const r = await quickSaveFromLast(obj, IDB_KEYS.boatFile, suggested);
+          toast(r.mode === "quickSave" ? "Boat saved to last file." : "Boat saved (Save As).");
+        } else {
+          downloadFallback(obj, suggested);
+          toast("Boat downloaded (browser does not support Save As folder picker).");
+        }
+        saveLocal();
+      }catch(e){
+        toast("Boat save cancelled or failed.");
+      }
+      setStatus("Ready");
+    });
+
+    $("btnSaveBoatAs").addEventListener("click", async () => {
+      const obj = buildBoatFile();
+      const suggested = suggestedBoatFilename();
+
+      setStatus("Saving boat as…");
+      try{
+        if(supportsFS()){
+          const r = await saveUsingDefaultFolderOrSaveAs(obj, suggested, IDB_KEYS.boatFile);
+          toast(r.mode === "defaultFolder" ? "Boat saved to default folder." : "Boat saved (Save As).");
+        } else {
+          downloadFallback(obj, suggested);
+          toast("Boat downloaded (browser does not support Save As folder picker).");
+        }
+        saveLocal();
+      }catch{
+        toast("Boat Save As cancelled or failed.");
+      }
+      setStatus("Ready");
+    });
+
+    $("btnOpenBoat").addEventListener("click", async () => {
+      setStatus("Opening boat…");
+      try{
+        if(supportsFS()){
+          const name = await openAndLoad(IDB_KEYS.boatFile, loadBoatFile);
+          toast(`Boat loaded: ${name}`);
+        } else {
+          toast("Open requires Chrome/Edge (file picker not supported in this browser).");
+        }
+      }catch{
+        toast("Boat open cancelled or failed.");
+      }
+      setStatus("Ready");
+    });
+
+    $("btnSaveTrip").addEventListener("click", async () => {
+      const obj = buildTripFile();
+      const suggested = suggestedTripFilename();
+
+      setStatus("Saving trip…");
+      try{
+        if(supportsFS()){
+          const r = await quickSaveFromLast(obj, IDB_KEYS.tripFile, suggested);
+          toast(r.mode === "quickSave" ? "Trip saved to last file." : "Trip saved (Save As).");
+        } else {
+          downloadFallback(obj, suggested);
+          toast("Trip downloaded (browser does not support Save As folder picker).");
+        }
+        saveLocal();
+      }catch{
+        toast("Trip save cancelled or failed.");
+      }
+      setStatus("Ready");
+    });
+
+    $("btnSaveTripAs").addEventListener("click", async () => {
+      const obj = buildTripFile();
+      const suggested = suggestedTripFilename();
+
+      setStatus("Saving trip as…");
+      try{
+        if(supportsFS()){
+          const r = await saveUsingDefaultFolderOrSaveAs(obj, suggested, IDB_KEYS.tripFile);
+          toast(r.mode === "defaultFolder" ? "Trip saved to default folder." : "Trip saved (Save As).");
+        } else {
+          downloadFallback(obj, suggested);
+          toast("Trip downloaded (browser does not support Save As folder picker).");
+        }
+        saveLocal();
+      }catch{
+        toast("Trip Save As cancelled or failed.");
+      }
+      setStatus("Ready");
+    });
+
+    $("btnOpenTrip").addEventListener("click", async () => {
+      setStatus("Opening trip…");
+      try{
+        if(supportsFS()){
+          const name = await openAndLoad(IDB_KEYS.tripFile, loadTripFile);
+          toast(`Trip loaded: ${name}`);
+        } else {
+          toast("Open requires Chrome/Edge (file picker not supported in this browser).");
+        }
+      }catch{
+        toast("Trip open cancelled or failed.");
+      }
+      setStatus("Ready");
+    });
+
+    $("btnPrintPDF").addEventListener("click", () => {
+      setStatus("Printing…");
+      printOrPDF();
+      setTimeout(()=>setStatus("Ready"), 800);
+    });
+
+    $("btnEmailTrip").addEventListener("click", () => {
+      setStatus("Opening email…");
+      toast("Opening your default email app…");
+      // Save on-screen state before leaving
+      saveLocal();
+      emailTrip();
+      setTimeout(()=>setStatus("Ready"), 900);
+    });
+
+    // ===== Startup =====
+    window.addEventListener("load", async () => {
+      applyLang();
+
+      // Restore on-screen Boat/Trip if present
+      const boat = loadLocalBoat();
+      if(boat) setGroup(boatFields, boat);
+
+      const trip = loadLocalTrip();
+      if(trip) setGroup(tripFields, trip);
+
+      // If no trip date, set a sensible default
+      if(!$("depDate").value) $("depDate").value = todayISO();
+
+      // PWA service worker registration
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("./service-worker.js").catch(()=>{});
+      }
+
+      // Small status hint
+      if(!supportsFS()){
+        toast("Note: Folder+filename Save As works best in Chrome/Edge. Other browsers will download files.");
+      }
+    });
+
+    // Auto-save on changes (lightweight)
+    const autoSaveIds = [...boatFields, ...tripFields];
+    autoSaveIds.forEach(id => {
+      const el = $(id);
+      if(!el) return;
+      el.addEventListener("change", saveLocal);
+      el.addEventListener("input", () => {
+        // avoid too frequent writes: simple debounce
+        clearTimeout(el._t);
+        el._t = setTimeout(saveLocal, 400);
+      });
+    });
+  </script>
+</body>
+</html>
